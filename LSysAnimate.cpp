@@ -9,8 +9,20 @@
 #include "emp/web/Button.hpp"
 #include "emp/web/Div.hpp"
 #include "emp/web/web.hpp"
+ #include "emp/config/ArgManager.hpp"
+ #include "emp/prefab/ConfigPanel.hpp"
+ #include "emp/web/UrlParams.hpp"
 
-emp::web::Document doc{"target"};
+EMP_BUILD_CONFIG(MyConfigType,
+    VALUE(ITERATIONS, int, 5, "How many iterations should run?"), 
+    VALUE(ANGLE, double, 30.0, "What should the angle be in radians?")
+)
+
+emp::web::Document doc("animation");
+emp::web::Document settings("settings");
+emp::web::Document buttons("buttons");
+MyConfigType config;
+
 
 // Structure holding the state of the rendering turtle
 struct TurtleState {
@@ -21,7 +33,7 @@ struct TurtleState {
   int branch_depth;
 };
 
-// Structure holding tissue rendering properties returned by student logic
+// Structure holding tissue rendering properties returned by custom
 struct TissueProperties {
   std::string color;
   double width;
@@ -54,7 +66,8 @@ class LSystemAnimator : public emp::web::Animate {
 
  public:
   LSystemAnimator() {
-    SetupGrammar();
+
+
 
     // Mount web UI elements directly
     doc << canvas;
@@ -62,6 +75,20 @@ class LSystemAnimator : public emp::web::Animate {
     doc << GetStepButton("Step");
     doc << emp::web::Button([this]() { Reset(); }, "Reset", "reset_btn");
     doc << info_panel;
+
+      // apply configuration query params and config files to config
+      auto specs = emp::ArgManager::make_builtin_specs(&config);
+      emp::ArgManager am(emp::web::GetUrlParams(), specs);
+      
+      am.UseCallbacks();
+      if (am.HasUnused()) std::exit(EXIT_FAILURE);
+
+      SetupGrammar();
+
+      // setup configuration panel
+      emp::prefab::ConfigPanel config_panel(config);
+      config_panel.SetRange("ITERATIONS", "1", "8");
+      settings << config_panel;
 
     Reset();
   }
@@ -73,10 +100,10 @@ class LSystemAnimator : public emp::web::Animate {
     axiom = "A";
     rules['A'] = "A";
 
-    angle_rad = 30.0 * (3.14159265358979323846 / 180.0);  // Turn angle in radians
+    angle_rad = config.ANGLE() * (3.14159265358979323846 / 180.0);  // Turn angle in radians
     initial_step_length = 70.0;                       // Initial segment length in pixels
     step_decay = 0.5;                               // Multiplied to step_length each update to shrink steps
-    max_depth = 8;                                  // Max number of iterations of the rules
+    max_depth = config.ITERATIONS();                                  // Max number of iterations of the rules
   }
 
   TissueProperties GetTissueProperties(int branch_depth, int current_depth) {
